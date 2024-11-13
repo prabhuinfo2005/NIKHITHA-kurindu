@@ -85,7 +85,7 @@ app.get('/numset', (req, res) => {
 
 
 app.post("/tmpdata", (req, res) => {
-  const { RECNO, NAME, MOBILE, ITEM, RATE, PAID } = req.body;
+  const { RECNO, NAME, MOBILE, ITEM, RATE, PAID,USRNAME } = req.body;
 
 
   const checkMobileQuery = 'SELECT SDMOBNO, SDNAME FROM SVdmst WHERE SDMOBNO = ? and SDNAME=?';
@@ -107,8 +107,8 @@ app.post("/tmpdata", (req, res) => {
       });
     }
 
-    const insertRECMSTQuery = 'INSERT INTO RECMST (RECNO, NAME, MOBILE, ITEM, RATE, PAID) VALUES (?, ?, ?, ?, ?, ?)';
-    db.query(insertRECMSTQuery, [RECNO, NAME, MOBILE, ITEM, RATE, PAID], (recInsertErr, recInsertResult) => {
+    const insertRECMSTQuery = 'INSERT INTO RECMST (RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME) VALUES (?, ?, ?, ?, ?, ?, ?)';
+    db.query(insertRECMSTQuery, [RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME], (recInsertErr, recInsertResult) => {
       if (recInsertErr) {
         console.log("Error executing query", recInsertErr);
         return res.status(500).send("Server error while inserting into RECMST");
@@ -124,7 +124,7 @@ app.post("/tmpdata", (req, res) => {
 app.get('/displaytypmdata', (req, res) => {
     
 
-    const query="select RECNO, MOBILE, NAME, ITEM, RATE, PAID FROM RECMST ORDER BY ID";
+    const query="select RECNO, MOBILE, NAME, ITEM, RATE, PAID, USRNAME FROM RECMST ORDER BY ID";
     db.query(query,(err, result) => {
       if (err) {
         return res.status(500).send("Error occurred while selecting tmpdata");
