@@ -10,25 +10,66 @@ require('dotenv').config({ path: 'dbcredential.env' });
 
 
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,      
-  user: process.env.DB_USER,      
-  password: process.env.DB_PASSWORD,  
-  database: process.env.DB_NAME    
+// const db = mysql.createConnection({
+//   host: process.env.DB_HOST,      
+//   user: process.env.DB_USER,      
+//   password: process.env.DB_PASSWORD,  
+//   database: process.env.DB_NAME    
+// });
+
+// db.connect((err)=>
+// {
+//     if(err)
+//     {
+//         console.error("Not Connected", err)
+//     }
+//     else{
+//         console.log("Connected");
+//     }
+// });
+
+const db = mysql.createPool({
+  connectionLimit: 10,  // Max number of simultaneous connections
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME
 });
 
-db.connect((err)=>
-{
-    if(err)
-    {
-        console.error("Not Connected", err)
+// Helper function to check and reconnect MySQL
+const checkDbConnection = (callback) => {
+  // Try to get a connection from the pool
+  db.getConnection((err, connection) => {
+    if (err) {
+      console.error("Error while checking connection: ", err);
+      // If connection fails, attempt to reconnect and return an error
+      return callback(true); // Connection is lost or error occurred
     }
-    else{
-        console.log("Connected");
+    connection.ping((pingErr) => {
+      if (pingErr) {
+        console.error("MySQL connection is lost. Reconnecting...");
+        return callback(true); // Connection is lost
+      } else {
+        console.log("MySQL connection is healthy.");
+        connection.release();  // Release the connection back to the pool
+        return callback(false); // Connection is healthy
+      }
+    });
+  });
+};
+
+// Middleware to check database connection before each request
+app.use((req, res, next) => {
+  checkDbConnection((connectionLost) => {
+    if (connectionLost) {
+      console.log("Reconnecting to the database...");
+      // Optional: You could retry the connection here if needed
+      // Return an error response or handle the reconnect logic.
+      return res.status(500).send("Database connection lost. Please try again later.");
     }
+    next();  // Proceed with the request
+  });
 });
-
-
 
 app.get("/login", (req, res) => {
   const { username, password } = req.query;
@@ -85,7 +126,7 @@ app.get('/numset', (req, res) => {
 
 
 app.post("/tmpdata", (req, res) => {
-  const { RECNO, NAME, MOBILE, ITEM, RATE, PAID,USRNAME } = req.body;
+  const { RECNO, NAME, MOBILE, ITEM, RATE, PAID,USRNAME, UPI} = req.body;
 
 
   const checkMobileQuery = 'SELECT SDMOBNO, SDNAME FROM SVdmst WHERE SDMOBNO = ? and SDNAME=?';
@@ -107,8 +148,8 @@ app.post("/tmpdata", (req, res) => {
       });
     }
 
-    const insertRECMSTQuery = 'INSERT INTO RECMST (RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME) VALUES (?, ?, ?, ?, ?, ?, ?)';
-    db.query(insertRECMSTQuery, [RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME], (recInsertErr, recInsertResult) => {
+    const insertRECMSTQuery = 'INSERT INTO RECMST (RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME, UPI) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+    db.query(insertRECMSTQuery, [RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME, UPI], (recInsertErr, recInsertResult) => {
       if (recInsertErr) {
         console.log("Error executing query", recInsertErr);
         return res.status(500).send("Server error while inserting into RECMST");
@@ -124,7 +165,7 @@ app.post("/tmpdata", (req, res) => {
 app.get('/displaytypmdata', (req, res) => {
     
 
-    const query="select RECNO, MOBILE, NAME, ITEM, RATE, PAID, USRNAME FROM RECMST ORDER BY ID";
+    const query="select RECNO, MOBILE, NAME, ITEM, RATE, PAID, USRNAME, UPI FROM RECMST ORDER BY ID";
     db.query(query,(err, result) => {
       if (err) {
         return res.status(500).send("Error occurred while selecting tmpdata");
@@ -153,6 +194,33 @@ app.get('/displaytypmdata', (req, res) => {
       }
     });
   });
+
+
+
+  
+  app.put('/updatetmpdataunpaid', (req, res) => {
+    const { selectedRecords, PAID, UPI } = req.body;
+  
+    if (!selectedRecords || selectedRecords.length === 0) {
+      return res.status(400).json({ error: 'No records selected' });
+    }
+  
+
+    const query = 'UPDATE RECMST SET PAID = ?, UPI=?  WHERE RECNO IN (?)';
+    
+   
+    db.query(query, [PAID,  UPI, selectedRecords], (err, result) => {
+      if (err) {
+        console.error('Error updating:', err);
+        res.status(500).json({ error: 'Failed to update records' });
+      } else if (result.affectedRows === 0) {
+        res.status(404).json({ error: 'No records found for update' });
+      } else {
+        res.json({ message: `${result.affectedRows} records updated successfully` });
+      }
+    });
+  });
+  
   
   app.delete('/deletetmpdata/:edittxtname', (req, res) => {
     const edittxtname = req.params.edittxtname;
@@ -172,24 +240,19 @@ app.get('/displaytypmdata', (req, res) => {
 
  
   app.get('/check-mobile', (req, res) => {
-    const mobile = req.query.mobile;
-  
-    if (!mobile || mobile.length !== 10) {
-      return res.status(400).json({ message: 'Invalid mobile number' });
-    }
-  
-    const query = 'SELECT SDNAME FROM SVdmst WHERE SDMOBNO = ?';
-    db.query(query, [mobile], (err, results) => {
+    const query = 'SELECT SDNAME FROM SVdmst';
+    
+    db.query(query, (err, results) => {
       if (err) {
         console.error('Error executing query:', err);
         return res.status(500).json({ message: 'Database query error' });
       }
   
-      console.log('Query Results:', results); 
-      const names = results.map(row => row.SDNAME);
-      return res.json({ SDNAMES: names });
+      console.log('Query Results:', results);
+      return res.json({ results });
     });
   });
+  
   
   // app.get('/check-mobile', (req, res) => {
   //   const mobile = req.query.mobile;
