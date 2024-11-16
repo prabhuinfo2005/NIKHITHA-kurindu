@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(express.static("frontend/browser"));
-require('dotenv').config({ path: 'dbcredential.env' });
+require('dotenv').config({ path: '.env' });
 
 
 
@@ -36,38 +36,37 @@ const db = mysql.createPool({
   database: process.env.DB_NAME
 });
 
-// Helper function to check and reconnect MySQL
+
 const checkDbConnection = (callback) => {
-  // Try to get a connection from the pool
+ 
   db.getConnection((err, connection) => {
     if (err) {
       console.error("Error while checking connection: ", err);
-      // If connection fails, attempt to reconnect and return an error
-      return callback(true); // Connection is lost or error occurred
+   
+      return callback(true);
     }
     connection.ping((pingErr) => {
       if (pingErr) {
         console.error("MySQL connection is lost. Reconnecting...");
-        return callback(true); // Connection is lost
+        return callback(true);
       } else {
         console.log("MySQL connection is healthy.");
-        connection.release();  // Release the connection back to the pool
-        return callback(false); // Connection is healthy
+        connection.release(); 
+        return callback(false);
       }
     });
   });
 };
 
-// Middleware to check database connection before each request
+
 app.use((req, res, next) => {
   checkDbConnection((connectionLost) => {
     if (connectionLost) {
       console.log("Reconnecting to the database...");
-      // Optional: You could retry the connection here if needed
-      // Return an error response or handle the reconnect logic.
+  
       return res.status(500).send("Database connection lost. Please try again later.");
     }
-    next();  // Proceed with the request
+    next();  
   });
 });
 
@@ -125,29 +124,48 @@ app.get('/numset', (req, res) => {
 });
 
 
+
+// app.post("/tmpdata", (req, res) => {
+//   const { RECNO, NAME, MOBILE, ITEM, RATE, PAID,USRNAME, UPI} = req.body;
+
+
+//   const checkMobileQuery = 'SELECT SDMOBNO, SDNAME FROM SVdmst WHERE SDMOBNO = ? and SDNAME=?';
+
+//   db.query(checkMobileQuery, [MOBILE, NAME], (err, results) => {
+//     if (err) {
+//       console.log("Error checking mobile number", err);
+//       return res.status(500).send("Server error while checking mobile");
+//     }
+
+//     if (results.length === 0) {
+//       const insertSVdmstQuery = 'INSERT INTO SVDMST (SDMOBNO, SDNAME) VALUES (?, ?)';
+//       db.query(insertSVdmstQuery, [MOBILE, NAME], (insertErr, insertResult) => {
+//         if (insertErr) {
+//           console.log("Error inserting into SVdmst", insertErr);
+//           return res.status(500).send("Server error while inserting into SVdmst");
+//         }
+//         console.log("Mobile and name inserted into SVdmst successfully");
+//       });
+//     }
+
+//     const insertRECMSTQuery = 'INSERT INTO RECMST (RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME, UPI) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+//     db.query(insertRECMSTQuery, [RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME, UPI], (recInsertErr, recInsertResult) => {
+//       if (recInsertErr) {
+//         console.log("Error executing query", recInsertErr);
+//         return res.status(500).send("Server error while inserting into RECMST");
+//       } else {
+//         return res.json({ message: "Inserted successfully into RECMST" });
+//       }
+//     });
+//   });
+// });
+
+
+
 app.post("/tmpdata", (req, res) => {
   const { RECNO, NAME, MOBILE, ITEM, RATE, PAID,USRNAME, UPI} = req.body;
 
-
-  const checkMobileQuery = 'SELECT SDMOBNO, SDNAME FROM SVdmst WHERE SDMOBNO = ? and SDNAME=?';
-
-  db.query(checkMobileQuery, [MOBILE, NAME], (err, results) => {
-    if (err) {
-      console.log("Error checking mobile number", err);
-      return res.status(500).send("Server error while checking mobile");
-    }
-
-    if (results.length === 0) {
-      const insertSVdmstQuery = 'INSERT INTO SVDMST (SDMOBNO, SDNAME) VALUES (?, ?)';
-      db.query(insertSVdmstQuery, [MOBILE, NAME], (insertErr, insertResult) => {
-        if (insertErr) {
-          console.log("Error inserting into SVdmst", insertErr);
-          return res.status(500).send("Server error while inserting into SVdmst");
-        }
-        console.log("Mobile and name inserted into SVdmst successfully");
-      });
-    }
-
+ 
     const insertRECMSTQuery = 'INSERT INTO RECMST (RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME, UPI) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
     db.query(insertRECMSTQuery, [RECNO, NAME, MOBILE, ITEM, RATE, PAID, USRNAME, UPI], (recInsertErr, recInsertResult) => {
       if (recInsertErr) {
@@ -157,9 +175,8 @@ app.post("/tmpdata", (req, res) => {
         return res.json({ message: "Inserted successfully into RECMST" });
       }
     });
-  });
-});
 
+});
 
 
 app.get('/displaytypmdata', (req, res) => {
@@ -239,8 +256,11 @@ app.get('/displaytypmdata', (req, res) => {
 
 
  
+
+  
+
   app.get('/check-mobile', (req, res) => {
-    const query = 'SELECT SDNAME FROM SVdmst';
+    const query = 'SELECT DISTINCT NAME FROM RECMST ORDER BY NAME ';
     
     db.query(query, (err, results) => {
       if (err) {
@@ -253,7 +273,23 @@ app.get('/displaytypmdata', (req, res) => {
     });
   });
   
+
+
+  // app.get('/check-mobile', (req, res) => {
+  //   const query = 'SELECT SDNAME FROM SVdmst';
+    
+  //   db.query(query, (err, results) => {
+  //     if (err) {
+  //       console.error('Error executing query:', err);
+  //       return res.status(500).json({ message: 'Database query error' });
+  //     }
   
+  //     console.log('Query Results:', results);
+  //     return res.json({ results });
+  //   });
+  // });
+
+
   // app.get('/check-mobile', (req, res) => {
   //   const mobile = req.query.mobile;
   
