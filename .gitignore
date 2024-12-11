@@ -3,4 +3,6 @@
 .env
 dbcredential.env
 
+emailpass.env
+
 /node_modules
